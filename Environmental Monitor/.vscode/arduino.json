@@ -1,0 +1,7 @@
+{
+    "sketch": "oled_temperature_humidity_clock_ssd1331.ino",
+    "board": "esp32:esp32:featheresp32",
+    "configuration": "FlashFreq=80,UploadSpeed=921600,DebugLevel=none,PartitionScheme=default",
+    "port": "COM3",
+    "output": "../build"
+}
