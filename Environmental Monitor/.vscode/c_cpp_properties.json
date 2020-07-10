@@ -18,7 +18,9 @@
                 "C:\\Users\\Allen\\Documents\\git_repos\\sketchbook\\Libraries\\Timezone\\src",
                 "C:\\Users\\Allen\\Documents\\git_repos\\sketchbook\\Libraries\\Adafruit_NeoPixel",
                 "C:\\Users\\Allen\\Documents\\git_repos\\sketchbook\\Libraries\\pubsubclient\\src",
-                "C:\\Users\\Allen\\Documents\\git_repos\\sketchbook\\Libraries\\Adafruit_Sensor"
+                "C:\\Users\\Allen\\Documents\\git_repos\\sketchbook\\Libraries\\Adafruit_Sensor",
+                "C:\\Users\\Allen\\Documents\\git_repos\\sketchbook\\Libraries\\Adafruit-GFX",
+                "C:\\Users\\Allen\\Documents\\git_repos\\sketchbook\\Libraries\\Adafruit-GFX\\fonts"
             ],
             "forcedInclude": [],
             "intelliSenseMode": "msvc-x64",

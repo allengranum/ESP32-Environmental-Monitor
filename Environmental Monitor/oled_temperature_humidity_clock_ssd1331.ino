@@ -1,63 +1,38 @@
 #include <SPI.h>
-#include <Wire.h>
 #include <WiFi.h>
 #include <WifiUDP.h>
-#include <DHT.h>
 #include <NTPClient.h>
 #include <Time.h>
 #include <TimeLib.h>
-#include <Adafruit_NeoPixel.h>
 #include "esp_onboarding.h"
 #include "esp_config.h"
 #include "esp_mqtt.h"
+#include "UiMgr.h"
+#include "ConfigMgr.h"
+#include "GpioMgr.h"
+#include "ConnMgr.h"
+#include "EspPins.h"
 //#include "bitmaps.h"
 #include <PubSubClient.h>
 #include <Timezone.h>
-#include <TFT_22_ILI9225.h>
 
-#include <../fonts/FreeSans12pt7b.h>
-#include <../fonts/FreeSans24pt7b.h>
-#include <../fonts/FreeSansBold24pt7b.h>
-#include <../fonts/FreeSans9pt7b.h>
+#include <FreeSans12pt7b.h>
+#include <FreeSans12pt7b.h>
+#include <FreeSans24pt7b.h>
+#include <fonts/FreeSansBold24pt7b.h>
+#include <fonts/FreeSans9pt7b.h>
 
-//#define HEADLESS 1
-
-/******************************************
- * ESP32 pin assignments                  *
- *                                        */
-/* INPUT PINS                             */
-#define DHT_SENSOR_PIN       21
-#define MOTION_SENSOR_PIN    12
-#define LIGHT_SENSOR_PIN     36
-#define GAS_SENSOR_PIN       26
-#define SOUND_SENSOR_PIN      4
-#define CONFIG_BUTTON        23
-#define DELETE_CONFIG_BUTTON 22
-
-/* SPI PINS                               */
-#define rst                  15
-#define dc                   19
-#define mosi                 18
-#define sclk                  5
-#define cs                   32
-
-/* OUTPUT PINS                            */
-#define STATUS_LED           13
-#define NEO_STATUS_LED_PIN   14
-#define NEO_NIGHTLIGHT_PIN   27
-#define BUZZER_PIN           25
-#define TFT_RS               33
-/******************************************/
-
+#define CONFIG_FILE_NAME    "/thing.conf"    // ToDo I need the / character???
 
 #define FAST_FLASH_uS 500000
 #define DATA_READ_INTERVAL_SECONDS 30
 
-//
-// NeoPixel Status LED
-#define LED_COUNT 1
-#define DEFAULT_STATUS_LED_BRIGHTNESS  5
-Adafruit_NeoPixel neoStatusLed(LED_COUNT, NEO_STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
+// Instantiate the components of the software
+UiMgr     uiMgr;
+ConfigMgr configMgr;
+GpioMgr   gpioMgr;
+ConnMgr   connMgr;
+
 
 //
 // NTP & time stuff
@@ -68,35 +43,12 @@ Adafruit_NeoPixel neoStatusLed(LED_COUNT, NEO_STATUS_LED_PIN, NEO_GRB + NEO_KHZ8
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
 
-//
-// DHT temperature stuff
-#define DHTTYPE DHT22
 
 #define DATA_PUBLISH_INTERVAL_KEY "DATA_PUBLISH_INTERVAL_SECONDS"
 #define DEFAULT_DATA_PUBLISH_INTERVAL_SECONDS 5
 
-float g_temperatureCalibrationValue = 0;
-float g_humidityCalibrationValue = 0;
-DHT dht(DHT_SENSOR_PIN, DHTTYPE);
-
-#define TFT_LED 0
-#define TFT_RS 19
-#define TFT_BRIGHTNESS 150
-#define ORIENTATION_0   1
-#define ORIENTATION_90  2
-#define ORIENTATION_180 3
-#define ORIENTATION_270 4
-
-// Use hardware SPI (faster - on Uno: 13-SCK, 12-MISO, 11-MOSI)
-//TFT_22_ILI9225 tft = TFT_22_ILI9225(TFT_RST, TFT_RS, TFT_CS, TFT_LED, TFT_BRIGHTNESS);
-// Use software SPI (slower)
-TFT_22_ILI9225 tft = TFT_22_ILI9225(rst, TFT_RS, cs, mosi, sclk, TFT_LED, TFT_BRIGHTNESS);
-
-#define LCD_HEIGHT 176
-#define LCD_WIDTH  220
-
-float currentTemp, oldTemp;
-float currentHumidity, oldHumidity;
+float g_currentTemp;
+float g_currentHumidity;
 
 String date, oldDate;
 String currentTime, oldTime;
@@ -107,41 +59,13 @@ const char * ampm[] = {"AM", "PM"} ;
 #define MAX_WIFI_CONNECT_ATTEMPTS 3
 #define WIFI_CONNECT_DELAY_MS 500
 
-#define TEMP_BLOCK_X       5
-#define TEMP_BLOCK_Y      0
-#define TEMP_BLOCK_HEIGHT 25
-#define TEMP_BLOCK_WIDTH  70
-
-#define HUMIDITY_BLOCK_X     150
-#define HUMIDITY_BLOCK_Y      0
-#define HUMIDITY_BLOCK_HEIGHT 25
-#define HUMIDITY_BLOCK_WIDTH  70
-
-#define TIME_BLOCK_X       0
-#define TIME_BLOCK_Y      50
-#define TIME_BLOCK_HEIGHT 40
-#define TIME_BLOCK_WIDTH 220
-
-#define MOTION_ICON_BOX_X 
-#define MOTION_ICON_BOX_Y
-
-#define DATE_BLOCK_X        2
-#define DATE_BLOCK_Y      100
-#define DATE_BLOCK_HEIGHT  25
-#define DATE_BLOCK_WIDTH  220
-
-#define DEVICE_NAME_BLOCK_X       60
-#define DEVICE_NAME_BLOCK_Y      151
-#define DEVICE_NAME_BLOCK_HEIGHT  25
-#define DEVICE_NAME_BLOCK_WIDTH  100
-
 
 hw_timer_t * dataCollectionTimer = NULL;
 hw_timer_t * wifiConnectTimer = NULL;
 hw_timer_t * statusLedTimer = NULL;
 
 
-bool timeToCollectData;
+bool timeToSendData;
 bool timeToConnectToWifi;
 int wifiAttemptCount;
 char* g_deviceName = NULL;
@@ -152,45 +76,27 @@ long unsigned int motionDetectedTime;
 boolean g_mqttConnected = false;
 int mqttReconnectCount = 0;
 int wifiReconnectCount = 0;
-int loopCount = 0;
-int g_orientation = 3;
+int g_orientation = DISPLAY_ORIENTATION_0;
 uint32_t g_statusLedColour;
-static int g_statusLedBrightness;
+int g_statusLedState;
+int g_statusLedBrightness;
+int g_displayBacklightBrightness;
+int g_displayBacklightState;
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-// Prototypes
-void connectToWifi(void);
-void readData(void);
-void sendData(void);
-void sendMotionData(void);
-void reconnect(void);
-void displayAll(void);
-
 
 void dataCollectionTimerCallback() {
-  timeToCollectData = true;
+  timeToSendData = true;
 }
 
-void statusLedTimerCallback() {
-  static boolean neoStatusLedOn;
-//  Serial.printf("statusLedTimerCallback: neoStatusLedOn = [%d]\n", neoStatusLedOn);
-//  Serial.printf("statusLedTimerCallback: millis = %d\n", millis());
-  
-//  if(neoStatusLedOn) {
-//    Serial.println("turn status led OFF");
-//    neoStatusLed.setBrightness(0);
-//    neoStatusLed.setPixelColor(0, neoStatusLed.Color(0,   0,   0));
-//    neoStatusLed.show();
-//    neoStatusLedOn = false;
-//  } else {
-//    Serial.println("turn status led ON");
-//    neoStatusLed.setBrightness(g_statusLedBrightness);
-//    neoStatusLed.setPixelColor(0, g_statusLedColour);
-//    neoStatusLed.show();
-//    neoStatusLedOn = true;
-//  }
+void statusLedTimerCallback() {  
+  if(g_statusLedState == LED_ON) {
+    g_statusLedState = LED_OFF;
+  } else {
+    g_statusLedState = LED_OFF;
+  }
 }
 
 void wifiConnectCallback() {
@@ -227,29 +133,7 @@ boolean saveStatusLedBrightness(int value) {
 }
 
 int getStatusLedBrightness() {
-    int value;
-    value = getCustomValueInt(STATUS_LED_BTIGHTNESS_KEY);
-    Serial.printf("getStatusLedBrightness: Value = %d\n",value);
-    if (value == 0) {
-      Serial.printf("getStatusLedBrightness: Warning: No saved brightness.\n");
-      Serial.printf("getStatusLedBrightness: Saving default brightness value = [%d]\n", DEFAULT_STATUS_LED_BRIGHTNESS);
-      saveStatusLedBrightness(DEFAULT_STATUS_LED_BRIGHTNESS);
-      sendStatusLedBrightness(DEFAULT_STATUS_LED_BRIGHTNESS);
-      return DEFAULT_STATUS_LED_BRIGHTNESS;
-    } else {
-      return value;
-    }
-}
-
-void setStatusLedBrightness(int value) {  
-  Serial.printf("setStatusLedBrightness: current = [%d], new = [%d]\n", g_statusLedBrightness,  value);
-  if (value != g_statusLedBrightness) {
-    Serial.printf("setStatusLedBrightness: saveStatusLedBrightness\n");
-    neoStatusLed.setBrightness(g_statusLedBrightness);
-    saveStatusLedBrightness(value);
-    //sendStatusLedBrightness(value);
-  }
-  Serial.printf("setStatusLedBrightness: End\n");
+    return getCustomValueInt(STATUS_LED_BTIGHTNESS_KEY);
 }
 
 int getDataPublishInterval() {
@@ -276,7 +160,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   char* payloadStr = (char*)malloc((length+1) * sizeof(char));
   memcpy(payloadStr, payload, length);
   payloadStr[length] = '\0';
-//  Serial.printf("payloadStr = [%s]\n", payloadStr);
 
   char* command;
   char* token;
@@ -285,93 +168,45 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   token = strtok((char*)topic, "/");
   
   while (NULL != token) {
-//    Serial.printf("current token = [%s]\n", token);
     lastToken = token;
     token = strtok(NULL, "/");
   }
   command = lastToken;
 
   // Brightness -------------------------
-//  Serial.printf("received command: [%s]\n", command);
   if (0 == strcmp(command, SUB_TOPIC_BRIGHTNESS)) {
-    int value = (int)atoi(payloadStr);
-    Serial.printf("Adjusting brightness to: %d\n", value);
-    tft.setBacklightBrightness(value);
+    g_displayBacklightBrightness = (int)atoi(payloadStr);    
   } else
   // Backlight -------------------------
   if (0 == strcmp(command, SUB_TOPIC_BACKLIGHT)) {
-    int value = (int)atoi(payloadStr);
-//    Serial.printf("Turning backlight %s", value = 0 ? "off" "on");
-    if (0 == value) {
-      Serial.println("backlight setting to false");
-      tft.setBacklight(false);
-    } else {
-      Serial.println("backlight setting to true");
-      tft.setBacklight(false);
-    }
-    tft.clear();
-    displayAll(true);
-  } else
-  // orientation -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_ORIENTATION)) {
-    Serial.println("Adjusting orientation");
-    int value = (int)atoi(payloadStr);
-    if (value > 0 && value < 5) {
-      tft.setOrientation(value);
-      tft.clear();
-      displayAll(true);
-    } else {
-      Serial.printf("Invalid value for orientation: %d\n", value);
-    }
+    g_displayBacklightState = (int)atoi(payloadStr);
   } else
   // flip -------------------------
   if (0 == strcmp(command, SUB_TOPIC_FLIP)) {
     Serial.println("flipping the display");
-    if (g_orientation == ORIENTATION_0) {
-      g_orientation = ORIENTATION_180;
+    if (g_orientation == DISPLAY_ORIENTATION_0) {
+      g_orientation = DISPLAY_ORIENTATION_180;
     } else {
-      g_orientation = ORIENTATION_0;
+      g_orientation = DISPLAY_ORIENTATION_0;
     }
-    tft.setOrientation(g_orientation);
-    tft.clear();
-    displayAll(true);
-      mqttClient.publish(topic, "clearing if retained", false);
   } else
   // temp calibration -------------------------
   if (0 == strcmp(command, SUB_TOPIC_TEMP_CALIB)) {
-    Serial.println("Adjusting temperature calibration");
     float value = (float)atof(payloadStr);
-    g_temperatureCalibrationValue = value;
-    readTemp();
-#ifndef HEADLESS
-    if (currentTemp != oldTemp) {
-      displayTemp(false);
-    }
-#endif
-    saveTemperatureCalibrationValue(payloadStr);
+    configMgr.setTemperatureCalibration(value);
   } else
   // humidity calibration -------------------------
   if (0 == strcmp(command, SUB_TOPIC_HUMIDITY_CALIB)) {
     Serial.println("Adjusting humidity calibration");
     float value = (float)atof(payloadStr);
     g_humidityCalibrationValue = value;
-    readHumidity();
-#ifndef HEADLESS
-    if (currentTemp != oldTemp) {
-      displayHumidity(false);
-    }
-#endif
-    saveHumidityCalibrationValue(payloadStr);
   } else
   // Neo Status LED brightness -------------------------
   if (0 == strcmp(command, SUB_TOPIC_LED_BRIGHTNESS)) {
 //    Serial.println("Adjusting led brightness");
     int value = (int)atoi(payloadStr);
     if (value >= 0 && value <= 255) {
-      // setStatusLedBrightness(value);
-      neoStatusLed.setBrightness(value);
-      neoStatusLed.setPixelColor(0, g_statusLedColour);
-      neoStatusLed.show();
+      g_statusLedBrightness = value;
     } else {
       Serial.printf("Invalid value for orientation: %d\n", value);
     }
@@ -393,22 +228,15 @@ void _configInit() {
   g_humidityCalibrationValue = getHumidityCalibrationValue();
 }
 
-void _statusLedInit() {
-  neoStatusLed.begin();
-  neoStatusLed.clear();
-  neoStatusLed.show();
-  g_statusLedColour = neoStatusLed.Color(255,   0,   0);
-  neoStatusLed.setPixelColor(0, g_statusLedColour);
-  neoStatusLed.setBrightness(g_statusLedBrightness);
-  neoStatusLed.show();
+void _statusLedInit() {  
+  g_statusLedColour = NEOCOLOUR_RED;
 }
 
 void _displayInit() {
-  tft.begin();
-  tft.setOrientation(3);
-  tft.clear();
-  tft.setBackgroundColor(COLOR_BLACK);
-  tft.setBacklightBrightness(100);
+  uiMgr.setDisplayOrientation(DISPLAY_ORIENTATION_0);
+  uiMgr.setBackgroundColour(COLOR_BLACK);
+  uiMgr.showStartingScreen();
+  uiMgr.setBacklightBrightness(configMgr.getDisplayBackligtBrightness());
   displayDeviceName(getDeviceName());
 }
 
@@ -505,6 +333,14 @@ void setup() {
 
   Serial.begin(9600);
 
+  configMgr.begin();
+
+  uiMgr.begin();
+
+  gpioMgr.begin();
+
+  connMgr.begin();
+
   _configInit();
 
   _statusLedInit();
@@ -531,13 +367,9 @@ void setup() {
   // tft.fillRectangle(DEVICE_NAME_BLOCK_X, DEVICE_NAME_BLOCK_Y, DEVICE_NAME_BLOCK_X + DEVICE_NAME_BLOCK_WIDTH, DEVICE_NAME_BLOCK_Y + DEVICE_NAME_BLOCK_HEIGHT, COLOR_TURQUOISE);
 
   _mqttInit();
-
-  dht.begin();
-
-  Wire.begin();
   
   // Set up the data collection timer
-    timeToCollectData = true;
+    timeToSendData = true;
 
     // Use 1st timer of 4 (counted from zero).
     // Set 80 divider for prescaler (see ESP32 Technical Reference Manual for more
@@ -590,16 +422,25 @@ void setup() {
 void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     if (g_mqttConnected) {
+
       mqttClient.loop();
-      if (timeToCollectData) {
-        readData();
+
+      readData();
+      
+      uiMgr.sync();
+
+      // configMgr.sync();
+
+      if (timeToSendData) {
         sendData();
-        timeToCollectData = false;
+        timeToSendData = false;
       }
 
-      if (readMotionData()) {
+      boolean motionStateChanged = readMotionData();
+      if (motionStateChanged) {
         sendMotionData();
       }
+
     } else {
       mqttReconnectCount++;
       g_mqttConnected = mqttConnectLocal(getMqttBroker(), mqttCallback, g_deviceName);
@@ -760,7 +601,7 @@ void readData() {
 #endif
   }
 
-  timeToCollectData = false;
+  timeToSendData = false;
 }
 
 void readTemp() {
@@ -946,41 +787,7 @@ void sendHumidityCalibrationValue() {
     g_mqttConnected = false;
   }
 }
-//------------------------------------------------------------------------------
-int getXCentered(String string, int width) {
-  int16_t x1, y1, xPos;
-  int16_t w, h;
 
-//  Serial.print("getXCentered: string=[");
-//  Serial.print(string);
-//  Serial.println("]");
-//  Serial.print("String length = ");
-//  Serial.println(string.length());
-  // Determine coordinates to center the time
-  tft.getGFXTextExtent(string, x1, y1, &w, &h);
-//  Serial.print("width of string = ");
-//  Serial.println(w);
-  xPos = (width-w)/2;
-//  Serial.print("calculated xPos = ");
-//  Serial.println(xPos);
-//  Serial.println("");
-//  Serial.println("");  
-  return xPos;
-}
-
-int getXRight(float val) {
-  int16_t x1, y1, xPos;
-  int16_t w, h;
-  char buff[10];
-
-  dtostrf(val, 3, 0, buff);  //4 is mininum width, 6 is precision
-  // Determine coordinates to center the time
-  tft.getGFXTextExtent(buff, x1, y1, &w, &h);
-  xPos = (LCD_HEIGHT-w);
-  tft.getGFXTextExtent("%", x1, y1, &w, &h);
-  xPos-=w;
-  return xPos;
-}
 
 void displayDeviceName(char* deviceName) {
   if (NULL != deviceName) {
