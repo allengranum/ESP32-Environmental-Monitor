@@ -54,9 +54,10 @@ extern int   g_statusLedBrightness;
 extern uint32_t g_statusLedColour;
 extern int g_statusLedState;
 
+UiMgr::UiMgr(DeviceInfo* info) {    
+    deviceInfo = info;
+    screen = BLANK_SCREEN;
 
-
-UiMgr::UiMgr() {    
     // Use hardware SPI (faster - on Uno: 13-SCK, 12-MISO, 11-MOSI)
     //tft = TFT_22_ILI9225(TFT_RST, TFT_RS, TFT_CS, TFT_LED, TFT_BRIGHTNESS);
     // Use software SPI (slower)
@@ -84,6 +85,10 @@ void UiMgr::showStartingScreen() {
 }
 
 void UiMgr::setDisplayOrientation(int orientation) {
+    // TODO
+}
+
+void setBacklightBrightness(int brightness) {
     // TODO
 }
 
@@ -223,6 +228,17 @@ void UiMgr::syncNightLight() {
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+void UiMgr::displayWifiConnecting() {
+    tft->clear();
+    tft->setFont(Terminal6x8);
+    String myString = "Connecting to: " + String(deviceInfo->getSsid());
+    tft->drawText(TIME_BLOCK_X, TIME_BLOCK_Y - 20, myString, COLOR_YELLOW);
+}
+
+void UiMgr::setScreen(EnvMonScreen screen) {
+    screen = screen;
+}
 
 void UiMgr::sync()
 {

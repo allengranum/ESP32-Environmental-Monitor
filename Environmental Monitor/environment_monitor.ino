@@ -1,19 +1,18 @@
-#include <SPI.h>
-#include <WiFi.h>
-#include <WifiUDP.h>
-#include <NTPClient.h>
-#include <Time.h>
-#include <TimeLib.h>
+#include "environment_monitor.h"
+#include "DeviceInfo.h"
 #include "esp_onboarding.h"
 #include "esp_config.h"
 #include "esp_mqtt.h"
 #include "UiMgr.h"
-#include "ConfigMgr.h"
+#include "EnvMonConfig.h"
 #include "GpioMgr.h"
 #include "ConnMgr.h"
 #include "EspPins.h"
 //#include "bitmaps.h"
-#include <PubSubClient.h>
+
+#include <SPI.h>
+#include <Time.h>
+#include <TimeLib.h>
 #include <Timezone.h>
 
 #include <FreeSans12pt7b.h>
@@ -28,11 +27,11 @@
 #define DATA_READ_INTERVAL_SECONDS 30
 
 // Instantiate the components of the software
-UiMgr     uiMgr;
-ConfigMgr configMgr;
-GpioMgr   gpioMgr;
-ConnMgr   connMgr;
-
+DeviceInfo   myDeviceInfo;
+UiMgr        uiMgr;
+GpioMgr      gpioMgr;
+ConnMgr      connMgr;
+EnvMonConfig envMonConfig;
 
 //
 // NTP & time stuff
@@ -42,10 +41,6 @@ ConnMgr   connMgr;
 #define NTP_ADDRESS  "ca.pool.ntp.org"  // change this to whatever pool is closest (see ntp.org)
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
-
-
-#define DATA_PUBLISH_INTERVAL_KEY "DATA_PUBLISH_INTERVAL_SECONDS"
-#define DEFAULT_DATA_PUBLISH_INTERVAL_SECONDS 5
 
 float g_currentTemp;
 float g_currentHumidity;
@@ -76,15 +71,14 @@ long unsigned int motionDetectedTime;
 boolean g_mqttConnected = false;
 int mqttReconnectCount = 0;
 int wifiReconnectCount = 0;
-int g_orientation = DISPLAY_ORIENTATION_0;
-uint32_t g_statusLedColour;
-int g_statusLedState;
-int g_statusLedBrightness;
-int g_displayBacklightBrightness;
-int g_displayBacklightState;
+//int g_orientation = DISPLAY_ORIENTATION_0;
+//uint32_t g_statusLedColour;
+//int g_statusLedState;
+//int g_statusLedBrightness;
+//int g_displayBacklightBrightness;
+//int g_displayBacklightState;
 
 WiFiClient espClient;
-PubSubClient mqttClient(espClient);
 
 
 void dataCollectionTimerCallback() {
@@ -92,10 +86,10 @@ void dataCollectionTimerCallback() {
 }
 
 void statusLedTimerCallback() {  
-  if(g_statusLedState == LED_ON) {
-    g_statusLedState = LED_OFF;
+  if(LED_ON == myDeviceInfo.getStatusLedState() ) {
+    myDeviceInfo.setStatusLedState(LED_OFF);
   } else {
-    g_statusLedState = LED_OFF;
+    myDeviceInfo.setStatusLedState(LED_ON);
   }
 }
 
@@ -108,136 +102,23 @@ void configButtonPressHandler() {
   //deleteConfigData();
 }
 
-float getTemperatureCalibrationValue() {
-  return getCustomValueFloat(TEMP_CALIB_KEY);
-}
-
-boolean saveTemperatureCalibrationValue(char* value) {
-  saveKeyValue( TEMP_CALIB_KEY, value, true);
-  sendTemperatureCalibrationValue();
-}
-
-int getHumidityCalibrationValue() {
-    return getCustomValueInt(HUMIDITY_CALIB_KEY);    
-}
-
-boolean saveHumidityCalibrationValue(char* value) {
-  saveKeyValue( HUMIDITY_CALIB_KEY, value, true);
-  sendHumidityCalibrationValue();
-}
-
-boolean saveStatusLedBrightness(int value) {
-  char valueStr[4];
-  sprintf(valueStr, "%d", value);
-  saveKeyValue( STATUS_LED_BTIGHTNESS_KEY, valueStr, true);
-}
-
-int getStatusLedBrightness() {
-    return getCustomValueInt(STATUS_LED_BTIGHTNESS_KEY);
-}
-
-int getDataPublishInterval() {
-    int value = getCustomValueInt(DATA_PUBLISH_INTERVAL_KEY);
-    if (value == 0) {
-      value = DEFAULT_DATA_PUBLISH_INTERVAL_SECONDS;
-    }
-    Serial.printf("getDataPublishInterval = [%d]\n", value);
-    return value;
-}
-
-char* getMqttBroker() {
-  return getCustomValue(MQTT_BROKER_KEY);
-}
-
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-  char* payloadStr = (char*)malloc((length+1) * sizeof(char));
-  memcpy(payloadStr, payload, length);
-  payloadStr[length] = '\0';
-
-  char* command;
-  char* token;
-  char* lastToken;
-
-  token = strtok((char*)topic, "/");
-  
-  while (NULL != token) {
-    lastToken = token;
-    token = strtok(NULL, "/");
-  }
-  command = lastToken;
-
-  // Brightness -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_BRIGHTNESS)) {
-    g_displayBacklightBrightness = (int)atoi(payloadStr);    
-  } else
-  // Backlight -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_BACKLIGHT)) {
-    g_displayBacklightState = (int)atoi(payloadStr);
-  } else
-  // flip -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_FLIP)) {
-    Serial.println("flipping the display");
-    if (g_orientation == DISPLAY_ORIENTATION_0) {
-      g_orientation = DISPLAY_ORIENTATION_180;
-    } else {
-      g_orientation = DISPLAY_ORIENTATION_0;
-    }
-  } else
-  // temp calibration -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_TEMP_CALIB)) {
-    float value = (float)atof(payloadStr);
-    configMgr.setTemperatureCalibration(value);
-  } else
-  // humidity calibration -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_HUMIDITY_CALIB)) {
-    Serial.println("Adjusting humidity calibration");
-    float value = (float)atof(payloadStr);
-    g_humidityCalibrationValue = value;
-  } else
-  // Neo Status LED brightness -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_LED_BRIGHTNESS)) {
-//    Serial.println("Adjusting led brightness");
-    int value = (int)atoi(payloadStr);
-    if (value >= 0 && value <= 255) {
-      g_statusLedBrightness = value;
-    } else {
-      Serial.printf("Invalid value for orientation: %d\n", value);
-    }
-  } else 
-  // Neo Status LED colour -------------------------
-  if (0 == strcmp(command, SUB_TOPIC_LED_COLOUR)) {
-    Serial.println("Setting led colour");
-//    neoStatusLed.setPixelColor(1, g_statusLedColour);
-//    neoStatusLed.show();
-  } else {
-    Serial.printf("#### unhandled command [%s]####\n", command);
-  }
-    
-}
 
 void _configInit() {
-  g_statusLedBrightness = getStatusLedBrightness();
-  g_temperatureCalibrationValue = getTemperatureCalibrationValue();
-  g_humidityCalibrationValue = getHumidityCalibrationValue();
+  myDeviceInfo.setStatusLedBrightness( envMonConfig.getStatusLedBrightness() );
+  myDeviceInfo.setTemperatureCalibrationValue( envMonConfig.getTemperatureCalibrationValue() );
+  myDeviceInfo.setHumidityCalibrationValue( envMonConfig.getHumidityCalibrationValue() );
 }
 
 void _statusLedInit() {  
-  g_statusLedColour = NEOCOLOUR_RED;
+  myDeviceInfo.setStatusLedColour(NEOCOLOUR_RED);
 }
 
 void _displayInit() {
   uiMgr.setDisplayOrientation(DISPLAY_ORIENTATION_0);
   uiMgr.setBackgroundColour(COLOR_BLACK);
   uiMgr.showStartingScreen();
-  uiMgr.setBacklightBrightness(configMgr.getDisplayBackligtBrightness());
-  displayDeviceName(getDeviceName());
+  uiMgr.setBacklightBrightness(envMonConfig.getDisplayBackligtBrightness());
+  uiMgr.showDeviceName(envMonConfig.getDeviceName());
 }
 
 void _gpioInit() {
@@ -256,7 +137,7 @@ void _buttonsInit() {
   if (deleteConfigButtonState == LOW) {
     Serial.printf("\n\nDelete config button pressed during boot.\n");
     Serial.printf("Deleting saved onboarding data...\n");
-    deleteConfigData();
+    envMonConfig.deleteConfigData();
   }
   if (configButtonState == LOW) {
     Serial.printf("\n\nConfig button pressed during boot.\n");
@@ -283,57 +164,14 @@ void _flashStatusLed(int onTime, int offTime) {
 //  timerAlarmEnable(statusLedTimer);
 }
 
-void _mqttInit() {
-  g_deviceName = getDeviceName();
-  g_mqttTopicRoot = getMqttTopicRoot();
-  
-  // Build the root MQTT topic for the device that  it will
-  // subscribe to for receiving device commands
-  sprintf(g_mqttTopicDevice, "/%s/cmd/+", g_deviceName);
-  Serial.printf("g_mqttTopicDevice = [%s]\n", g_mqttTopicDevice);
-  
-  sprintf(g_topic_brightness, "%s/%s/%s", MQTT_TOPIC_ROOT, g_deviceName, SUB_TOPIC_BRIGHTNESS);
-  Serial.printf("g_topic_brightness = [%s]\n", g_topic_brightness);
 
-  sprintf(g_topic_orientation, "%s/%s/%s", MQTT_TOPIC_ROOT, g_deviceName, SUB_TOPIC_ORIENTATION);
-  Serial.printf("g_topic_orientation = [%s]\n", g_topic_orientation);
-
-  sprintf(g_topic_temp_calib, "%s/%s/%s", MQTT_TOPIC_ROOT, g_deviceName, SUB_TOPIC_TEMP_CALIB);
-  Serial.printf("g_topic_temp_calib = [%s]\n", g_topic_temp_calib);
-
-  sprintf(g_topic_humidity_calib, "%s/%s/%s", MQTT_TOPIC_ROOT, g_deviceName, SUB_TOPIC_HUMIDITY_CALIB);
-  Serial.printf("g_topic_humidity_calib = [%s]\n", g_topic_humidity_calib);
-
-  mqttClient.setServer(getMqttBroker(), 1883);
-  mqttClient.setCallback(mqttCallback);
-  g_mqttConnected = mqttConnectLocal(getMqttBroker(), mqttCallback, g_deviceName);
-  if (g_mqttConnected) {
-    char topic[256];
-    char value[2];
-
-    sprintf(topic, "%s/%s/%s", MQTT_TOPIC_ROOT, g_deviceName, SUB_TOPIC_CONNECTED);
-    sprintf(value, "1");
-    Serial.printf("Publish: %s:%s\n", topic, value);
-    mqttClient.publish(&topic[0], value, true);
-    sprintf(topic, "%s/%s/%s", MQTT_TOPIC_ROOT, g_deviceName, SUB_TOPIC_TEMP_CALIB);
-    sprintf(value, "", g_temperatureCalibrationValue);
-    Serial.printf("Publish: %s:%s\n", topic, value);
-    mqttClient.publish(&topic[0], value, true);
-
-
-
-
-
-    g_statusLedBrightness = getStatusLedBrightness();
-  g_temperatureCalibrationValue = getTemperatureCalibrationValue();
-  g_humidityCalibrationValue = getHumidityCalibrationValue();
-  }
-}
 void setup() {
 
   Serial.begin(9600);
 
-  configMgr.begin();
+  myDeviceInfo.begin();
+
+  envMonConfig.begin();
 
   uiMgr.begin();
 
@@ -356,7 +194,9 @@ void setup() {
   _flashStatusLed(100, 100);
 
   delay(1000); // this is magical. if you take it out, things go bad
-  dumpConfig();
+  envMonConfig.dumpConfig();
+
+  connMgr.connect();
 
   connectToWifi();
   
@@ -453,78 +293,6 @@ void loop() {
 }
 
 //-------------------------------------------------------------------------------
-
-void connectToWifi() {
-//  timerEnd(wifiConnectTimer);
-  
-  // Get the list of known wifi networks from the config file
-  WifiInfo* knownNetworks = getSsids();
-  
-  if (knownNetworks->numberOfSSIDsFound > 0) {
-    Serial.printf("connectToWifi: %d known networks found in config file\n", knownNetworks->numberOfSSIDsFound);
-    delay(500);
-    for (int i=0;i<knownNetworks->numberOfSSIDsFound;i++) {
-      Serial.printf("    %d: [%s]\n", i, knownNetworks->ssid[i]);
-    }
-
-    // Get a list of available wifi networks
-    WifiInfo* availableNetworks = scanForAPs();
-        
-    char* ssid = NULL;
-    char* password = NULL;
-    int index=0;
-    
-    while( index < availableNetworks->numberOfSSIDsFound && ssid == NULL ) {
-      char* currentSsid = availableNetworks->ssid[index];
-      Serial.printf("Checking if I know about ssid [%s]\n", currentSsid);
-      // See if it exists in the known list
-      for (int i=0;i<knownNetworks->numberOfSSIDsFound;i++) {
-        if (0 == strcmp(currentSsid, knownNetworks->ssid[i])) {
-          ssid = knownNetworks->ssid[i];
-        }
-      }
-
-      // if yes, get the associated passsword and attempt to connect
-      if (NULL != ssid) {
-        Serial.printf("connectToWifi: Attempting to connect to SSID: [%s]\n", ssid);
-        password = getWifiPassword(ssid);
-        Serial.printf("connectToWifi: Using password: [%s]\n", password);
-
-        displayWifiConnecting(ssid);
-                
-        WiFi.begin(ssid, password);
-        
-        while (WiFi.status() != WL_CONNECTED) {
-            delay(500);
-            Serial.print(".");
-        }
-
-        displayWifiConnected(ssid);
-        
-        Serial.printf("WiFi connected\n");
-        Serial.printf("IP address: \n");
-        Serial.println(WiFi.localIP());
-      } else {
-          Serial.printf("I don't know any of the available WiFi networks.\n");
-      }
-      index++;
-      // if no, get the next available network from the top of the available list and try again    
-    }
-    
-    // Free up memory
-    free(availableNetworks->ssid);
-    free(availableNetworks);
-    free(knownNetworks->ssid);
-
-    if (WiFi.status() != WL_CONNECTED) {
-      performOnboarding();
-    }
-  } else {
-    Serial.println("connectToWifi: need to perform onboarding");
-    delay(500);
-    performOnboarding();
-  }   
-}
 
 void displayConfigMode(char* apName, IPAddress accessPointIp) {
 //    tft.fillRectangle(TIME_BLOCK_X, (TIME_BLOCK_Y - 30), LCD_WIDTH, 34, COLOR_BLACK);
@@ -788,16 +556,6 @@ void sendHumidityCalibrationValue() {
   }
 }
 
-
-void displayDeviceName(char* deviceName) {
-  if (NULL != deviceName) {
-    tft.setGFXFont(&FreeSans9pt7b);
-    Serial.printf("displayDeviceName: [%s], x=%d, y=%d\n", deviceName, DEVICE_NAME_BLOCK_X, DEVICE_NAME_BLOCK_Y);
-    int xPos = getXCentered(String(deviceName), DEVICE_NAME_BLOCK_WIDTH) + DEVICE_NAME_BLOCK_X;
-    tft.drawGFXText(xPos , DEVICE_NAME_BLOCK_Y + (DEVICE_NAME_BLOCK_HEIGHT-5), String(deviceName), COLOR_SILVER);
-  }
-}
-
 void displayTemp(boolean force){
   char currentTempChar[8];
   char oldTempChar[8];
@@ -958,3 +716,77 @@ void reconnect() {
     }
   }
 }
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+  char* payloadStr = (char*)malloc((length+1) * sizeof(char));
+  memcpy(payloadStr, payload, length);
+  payloadStr[length] = '\0';
+
+  char* command;
+  char* token;
+  char* lastToken;
+
+  token = strtok((char*)topic, "/");
+  
+  while (NULL != token) {
+    lastToken = token;
+    token = strtok(NULL, "/");
+  }
+  command = lastToken;
+
+  // Brightness -------------------------
+  if (0 == strcmp(command, SUB_TOPIC_BRIGHTNESS)) {
+    g_displayBacklightBrightness = (int)atoi(payloadStr);    
+  } else
+  // Backlight -------------------------
+  if (0 == strcmp(command, SUB_TOPIC_BACKLIGHT)) {
+    g_displayBacklightState = (int)atoi(payloadStr);
+  } else
+  // flip -------------------------
+  if (0 == strcmp(command, SUB_TOPIC_FLIP)) {
+    Serial.println("flipping the display");
+    if (g_orientation == DISPLAY_ORIENTATION_0) {
+      g_orientation = DISPLAY_ORIENTATION_180;
+    } else {
+      g_orientation = DISPLAY_ORIENTATION_0;
+    }
+  } else
+  // temp calibration -------------------------
+  if (0 == strcmp(command, SUB_TOPIC_TEMP_CALIB)) {
+    float value = (float)atof(payloadStr);
+    envMonConfig.setTemperatureCalibrationValue(value);
+  } else
+  // humidity calibration -------------------------
+  if (0 == strcmp(command, SUB_TOPIC_HUMIDITY_CALIB)) {
+    Serial.println("Adjusting humidity calibration");
+    float value = (float)atof(payloadStr);
+    envMonConfig.setHumidityCalibrationValue(value);
+  } else
+  // Neo Status LED brightness -------------------------
+  if (0 == strcmp(command, SUB_TOPIC_LED_BRIGHTNESS)) {
+//    Serial.println("Adjusting led brightness");
+    int value = (int)atoi(payloadStr);
+    if (value >= 0 && value <= 255) {
+      g_statusLedBrightness = value;
+    } else {
+      Serial.printf("Invalid value for orientation: %d\n", value);
+    }
+  } else 
+  // Neo Status LED colour -------------------------
+  if (0 == strcmp(command, SUB_TOPIC_LED_COLOUR)) {
+    Serial.println("Setting led colour");
+//    neoStatusLed.setPixelColor(1, g_statusLedColour);
+//    neoStatusLed.show();
+  } else {
+    Serial.printf("#### unhandled command [%s]####\n", command);
+  }
+    
+}
+

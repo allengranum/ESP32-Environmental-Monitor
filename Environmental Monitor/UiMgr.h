@@ -1,6 +1,7 @@
 #ifndef UI_MGR_H
 #define UI_MGR_H
 
+#include "DeviceInfo.h"
 #include <TFT_22_ILI9225.h>
 #include <Adafruit_NeoPixel.h>
 
@@ -18,13 +19,17 @@
 
 class UiMgr {
     public:
-        UiMgr();
+        UiMgr(DeviceInfo* info);
         void begin();
         void sync();
         void showStartingScreen();
         void setDisplayOrientation(int);
         void setBackgroundColour(int);
         void setBacklightBrightness(int);
+        void showDeviceName(char*);
+        void displayWifiConnecting();
+        void setScreen(EnvMonScreen);
+        
     private:
         void syncStatusLedBrightness();
         void syncStatusLedColour();
@@ -47,13 +52,16 @@ class UiMgr {
         void syncWifiIcon();
         void syncMqttIcon();
         void showDeviceName(char*);
-        int getXRight(float val);
-        int getXCentered(String string, int width);
+        int  getXRight(float val);
+        int  getXCentered(String string, int width);
+        void blackout();
 
         TFT_22_ILI9225 *tft;
         Adafruit_NeoPixel *neoStatusLed;
         Adafruit_NeoPixel *nightLight;
 
+        DeviceInfo* deviceInfo;
+        EnvMonScreen screen;
         float activeTemp;
         float activeHumidity;
         char* activeTime;

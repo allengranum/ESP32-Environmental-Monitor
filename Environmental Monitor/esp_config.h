@@ -17,7 +17,7 @@
 #define MAX_LINES_IN_CONFIG_FILE 256
 #define MAX_LINE_SIZE       256
 
-
+/*
 WifiInfo* getSsids(void);
 char* getDeviceName(void);
 void setDeviceName(char*);
@@ -32,5 +32,6 @@ char* getOrientation(void);
 char* getBrightness(void);
 char* getMqttTopicRoot(void);
 boolean saveKeyValue(char* , char* , boolean);
+*/
 
 #endif
