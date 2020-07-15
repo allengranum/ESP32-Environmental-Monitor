@@ -27,7 +27,6 @@ class UiMgr {
         void setBackgroundColour(int);
         void setBacklightBrightness(int);
         void showDeviceName(char*);
-        void displayWifiConnecting();
         void setScreen(EnvMonScreen);
         
     private:
@@ -55,13 +54,18 @@ class UiMgr {
         int  getXRight(float val);
         int  getXCentered(String string, int width);
         void blackout();
+        void displayStartingScreen();
+        void displayWifiConnectingScreen();
+        void displayWifiConnected(char*);
+        void displayHomeScreen();
+        void displayConfigScreen();
 
         TFT_22_ILI9225 *tft;
         Adafruit_NeoPixel *neoStatusLed;
         Adafruit_NeoPixel *nightLight;
 
         DeviceInfo* deviceInfo;
-        EnvMonScreen screen;
+        EnvMonScreen currentlyDisplayedScreen;
         float activeTemp;
         float activeHumidity;
         char* activeTime;

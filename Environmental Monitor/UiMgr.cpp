@@ -56,7 +56,12 @@ extern int g_statusLedState;
 
 UiMgr::UiMgr(DeviceInfo* info) {    
     deviceInfo = info;
-    screen = BLANK_SCREEN;
+
+    neoStatusLed->begin();
+    tft->begin();
+
+    currentlyDisplayedScreen = BLANK_SCREEN;
+    blackout();
 
     // Use hardware SPI (faster - on Uno: 13-SCK, 12-MISO, 11-MOSI)
     //tft = TFT_22_ILI9225(TFT_RST, TFT_RS, TFT_CS, TFT_LED, TFT_BRIGHTNESS);
@@ -70,14 +75,15 @@ UiMgr::UiMgr(DeviceInfo* info) {
     nightLight = new Adafruit_NeoPixel(LED_COUNT, NEO_STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);    
 }
 
-void UiMgr::begin() {
-    neoStatusLed->begin();
+void UiMgr::blackout() {
     turnOffStatusLed();
-
-    tft->begin();
-    tft->clear();    
-    activeDisplayOrientation = DISPLAY_ORIENTATION_0;
+    tft->clear();
     activeDisplayBacklightStatus = DISPLAY_BACKLIGHT_OFF;
+}
+
+void UiMgr::begin() {
+    activeDisplayOrientation = DISPLAY_ORIENTATION_0;
+    currentlyDisplayedScreen = STARTING_SCREEN;
 }
 
 void UiMgr::showStartingScreen() {
@@ -169,7 +175,7 @@ void UiMgr::syncTime() {
 
 }
 
-void syncDate() {
+void UiMgr::syncDate() {
 
 }
 
@@ -229,19 +235,75 @@ void UiMgr::syncNightLight() {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-void UiMgr::displayWifiConnecting() {
+void UiMgr::displayWifiConnectingScreen() {
     tft->clear();
     tft->setFont(Terminal6x8);
     String myString = "Connecting to: " + String(deviceInfo->getSsid());
     tft->drawText(TIME_BLOCK_X, TIME_BLOCK_Y - 20, myString, COLOR_YELLOW);
 }
 
+void UiMgr::displayWifiConnected(char* ssid) {
+  tft->clear();
+//    display.setTextSize(1);
+//    display.setCursor(TIME_BLOCK_X,TIME_BLOCK_Y - 30);
+//    display.setTextColor(GREEN);
+//    display.println("Connected to: ");
+//    display.setTextColor(YELLOW);
+//    display.println(ssid);
+//    display.println("");
+//    display.println(WiFi.localIP());
+}
+
+void UiMgr::displayHomeScreen() {
+
+}
+
+void UiMgr::displayConfigScreen() {
+
+}
+
 void UiMgr::setScreen(EnvMonScreen screen) {
-    screen = screen;
+    switch (screen) {
+        case BLANK_SCREEN:
+            blackout();
+            break;
+
+        case STARTING_SCREEN:
+            displayStartingScreen();
+            break;
+
+        case CONNECTING_SCREEN:
+            displayWifiConnectingScreen();
+            break;
+
+        case HOME_SCREEN:
+            break;
+    }
+    currentlyDisplayedScreen = screen;
 }
 
 void UiMgr::sync()
 {
+    switch (currentlyDisplayedScreen) {
+        case BLANK_SCREEN:
+            break;
+
+        case STARTING_SCREEN:
+            break;
+
+        case CONNECTING_SCREEN:
+            if (deviceInfo->wifiConnected())
+                if (deviceInfo->mqttConnected())
+                    displayMqttConnectedScreen();
+            break;
+
+        case HOME_SCREEN:
+            break;
+
+        default:
+            break;
+    }
+
     syncStatusLed();
     syncLcd();
     syncBuzzer();
