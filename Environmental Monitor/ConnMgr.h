@@ -7,7 +7,7 @@
 #include <WifiUDP.h>
 #include <NTPClient.h>
 
-
+// NTP & time stuff
 #define NTP_OFFSET   60 * 60      // In seconds
 #define NTP_INTERVAL 60 * 1000    // In miliseconds
 #define NTP_ADDRESS  "ca.pool.ntp.org"  // change this to whatever pool is closest (see ntp.org)
@@ -16,12 +16,14 @@ class ConnMgr {
     public:
         ConnMgr(EnvMonConfig*);
         void begin();
+        void loop();
         void connect();
         WifiInfo* scanForAPs();
         
     private:
         void connectWifi();
         void connectMqtt();
+        void readDateTime();
 
         WiFiClient* wifiClient;
         WiFiUDP *wifiUDP;

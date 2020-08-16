@@ -17,10 +17,14 @@
 #define DISPLAY_ORIENTATION_0   3
 #define DISPLAY_ORIENTATION_180 1
 
+#define GREEN 0x0000FF00
+#define RED   0x00FF0000
+
 class UiMgr {
     public:
         UiMgr(DeviceInfo* info);
         void begin();
+        void loop();
         void sync();
         void showStartingScreen();
         void setDisplayOrientation(int);
@@ -28,6 +32,10 @@ class UiMgr {
         void setBacklightBrightness(int);
         void showDeviceName(char*);
         void setScreen(EnvMonScreen);
+        void flashStatusLed(bool);
+        void turnOffStatusLed();
+        void turnOnStatusLed();
+        void setStatusLedColour(int);
         
     private:
         void syncStatusLedBrightness();
@@ -44,8 +52,6 @@ class UiMgr {
         void syncLcd();
         void syncStatusLed();
         void syncStatusLedState();
-        void turnOffStatusLed();
-        void turnOnStatusLed();
         void syncNightLight();
         void syncBuzzer();
         void syncWifiIcon();

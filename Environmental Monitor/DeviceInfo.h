@@ -40,6 +40,7 @@ class DeviceInfo {
             float temperature;
             float humidityCalibrationValue;
             float humidity;
+            bool currentMotionDetectedState = false;
             int   statusLedColour;
             int   statusLedBrightness;
             int   displayBacklightBrightness;

@@ -18,6 +18,8 @@ class EnvMonConfig {
     public:
         EnvMonConfig();
         void begin();
+        void loop();
+
         char* getDeviceName();
         void  setDeviceName(char*);
         char* getWifiPassword();
@@ -52,11 +54,8 @@ char* getBrightness(void);
 char* getMqttTopicRoot(void);
 boolean saveKeyValue(char* , char* , boolean);
 */
-
-
-
-
     private:
+        void sync();
         ConfigMgr *configMgr;
         float g_temperatureCalibrationValue;
 };

@@ -4,6 +4,9 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
+boolean g_mqttConnected = false;
+int mqttReconnectCount = 0;
+
 void EnvMonMqtt::mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -133,3 +136,138 @@ void EnvMonMqtt::init() {
     // g_humidityCalibrationValue = getHumidityCalibrationValue();
   }
 }
+
+
+
+
+boolean EnvMonMqtt::mqttConnectLocal(char* broker, void (*callback)(char*, uint8_t*, unsigned int), const char* deviceName) {
+  boolean retVal = false;
+  
+  if (broker) {
+    Serial.printf("mqttConnect: Connecting to mqttBroker = [%s]\n", broker);  
+//  delay(2000);
+    mqttClient.setServer(broker, 1883);
+    mqttClient.setCallback(mqttCallback);    
+//    Serial.printf("Attempting to connect to MQTT Broker [%s]\n", deviceName);
+//    delay(2000);
+    if (mqttClient.connect(deviceName)) {
+      Serial.printf("Connected to MQTT broker [%s]\n", broker);
+      mqttClient.subscribe(g_mqttTopicDevice);
+//      boolean result = mqttClient.subscribe("inTopic");
+//      if (!result) {
+//        Serial.println("ERROR: Failed to subscribe to topic inTopic");
+//      }
+      Serial.printf("Subscribed to topic: [%s]\n", g_mqttTopicDevice);
+//      Serial.printf("Subscribed to topic: [%s]\n","inTopic");
+    } else {
+      Serial.printf("mqttConnect: ERROR: Failed to connect to MQTT broker [%s]\n", broker);
+    }
+
+    if (mqttClient.connected()) {
+      retVal = true;
+      Serial.println("MQTT connection verified");
+    } else {
+      Serial.println("Unable to verify MQTT connectio");
+    }
+  } else {
+    Serial.println("mqttConnect: ERROR: Unable to connect. broker = NULL");
+  }
+  return retVal;
+}
+
+void EnvMonMqtt::reconnect() {
+  // Loop until we're reconnected
+  while (!mqttClient.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random client ID
+    String clientId = "ESP8266Client-";
+    clientId += String(random(0xffff), HEX);
+    // Attempt to connect
+    if (mqttClient.connect(clientId.c_str())) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      mqttClient.publish("outTopic", "hello world");
+      // ... and resubscribe
+      mqttClient.subscribe("inTopic");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+// void mqttCallback(char* topic, byte* payload, unsigned int length) {
+//   Serial.print("Message arrived [");
+//   Serial.print(topic);
+//   Serial.print("] ");
+//   for (int i = 0; i < length; i++) {
+//     Serial.print((char)payload[i]);
+//   }
+//   Serial.println();
+//   char* payloadStr = (char*)malloc((length+1) * sizeof(char));
+//   memcpy(payloadStr, payload, length);
+//   payloadStr[length] = '\0';
+
+//   char* command;
+//   char* token;
+//   char* lastToken;
+
+//   token = strtok((char*)topic, "/");
+  
+//   while (NULL != token) {
+//     lastToken = token;
+//     token = strtok(NULL, "/");
+//   }
+//   command = lastToken;
+
+//   // Brightness -------------------------
+//   if (0 == strcmp(command, SUB_TOPIC_BRIGHTNESS)) {
+//     g_displayBacklightBrightness = (int)atoi(payloadStr);    
+//   } else
+//   // Backlight -------------------------
+//   if (0 == strcmp(command, SUB_TOPIC_BACKLIGHT)) {
+//     g_displayBacklightState = (int)atoi(payloadStr);
+//   } else
+//   // flip -------------------------
+//   if (0 == strcmp(command, SUB_TOPIC_FLIP)) {
+//     Serial.println("flipping the display");
+//     if (g_orientation == DISPLAY_ORIENTATION_0) {
+//       g_orientation = DISPLAY_ORIENTATION_180;
+//     } else {
+//       g_orientation = DISPLAY_ORIENTATION_0;
+//     }
+//   } else
+//   // temp calibration -------------------------
+//   if (0 == strcmp(command, SUB_TOPIC_TEMP_CALIB)) {
+//     float value = (float)atof(payloadStr);
+//     envMonConfig.setTemperatureCalibrationValue(value);
+//   } else
+//   // humidity calibration -------------------------
+//   if (0 == strcmp(command, SUB_TOPIC_HUMIDITY_CALIB)) {
+//     Serial.println("Adjusting humidity calibration");
+//     float value = (float)atof(payloadStr);
+//     envMonConfig.setHumidityCalibrationValue(value);
+//   } else
+//   // Neo Status LED brightness -------------------------
+//   if (0 == strcmp(command, SUB_TOPIC_LED_BRIGHTNESS)) {
+// //    Serial.println("Adjusting led brightness");
+//     int value = (int)atoi(payloadStr);
+//     if (value >= 0 && value <= 255) {
+//       g_statusLedBrightness = value;
+//     } else {
+//       Serial.printf("Invalid value for orientation: %d\n", value);
+//     }
+//   } else 
+//   // Neo Status LED colour -------------------------
+//   if (0 == strcmp(command, SUB_TOPIC_LED_COLOUR)) {
+//     Serial.println("Setting led colour");
+// //    neoStatusLed.setPixelColor(1, g_statusLedColour);
+// //    neoStatusLed.show();
+//   } else {
+//     Serial.printf("#### unhandled command [%s]####\n", command);
+//   }
+    
+// }

@@ -9,6 +9,14 @@ void EnvMonConfig::begin() {
     configMgr->begin();
 }
 
+void EnvMonConfig::loop() {
+    sync();
+}
+
+void EnvMonConfig::sync() {
+    // Check the values in deviceInfo and update flash as required
+}
+
 char* EnvMonConfig::getDeviceName() {
     return configMgr->getDeviceName();
 }

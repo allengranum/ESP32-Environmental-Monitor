@@ -23,16 +23,18 @@ char g_topic_humidity_calib[128];
 
 class EnvMonMqtt {
     public:
-        EnvMonMqtt(EnvMonConfig config, DeviceStateInfo *devStateInfoPtr, WiFiClient *wifiClientPtr);
+        EnvMonMqtt(EnvMonConfig, DeviceInfo, WiFiClient);
         void begin();
         void init();
 
     private:
         void mqttCallback(char* topic, byte* payload, unsigned int length);
+        void reconnect();
+        void mqttConnectLocal(char* broker, void (*callback)(char*, uint8_t*, unsigned int), const char* deviceName);
 
-        DeviceStateInfo* deviceStateInfo;
-        EnvMonConfig     envMonConfig;
         boolean          mqttConnected;
+        EnvMonConfig     envMonConfig;
+        DeviceInfo*      deviceInfo;
         WiFiClient*      espClient;
         PubSubClient*    mqttClient;
 };

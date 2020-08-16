@@ -2,6 +2,8 @@
 #include <string.h>
 #include "esp_onboarding.h"
 
+#define CONFIG_FILE_NAME    "/thing.conf"    // ToDo I need the / character???
+
 ConfigMgr::ConfigMgr(char* fileName) {
     if (fileName != NULL)
       strcpy(&configFileName[0], fileName);
@@ -427,7 +429,7 @@ WifiInfo* ConfigMgr::getSsids(void) {
 /*
  * getWifiPasswordFromValue
  */
-static char* ConfigMgr::getWifiPasswordFromValue(char* value) {
+char* ConfigMgr::getWifiPasswordFromValue(char* value) {
   char* result = NULL;
   if (NULL != value) {
     char* tempBuf = (char*)malloc(strlen(value)+1 * sizeof(char));

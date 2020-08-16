@@ -4,6 +4,20 @@
 #include <TimeLib.h>
 #include <Timezone.h>
 
+#define MAX_WIFI_CONNECT_ATTEMPTS 3
+#define WIFI_CONNECT_DELAY_MS 500
+
+// TODO - are these still required???
+bool timeToConnectToWifi;
+int wifiAttemptCount;
+int wifiReconnectCount = 0;
+
+
+
+void wifiConnectCallback() {
+      timeToConnectToWifi = true;
+}
+
 ConnMgr::ConnMgr(EnvMonConfig* config) {    
     envMonConfig = config;
     wifiClient = new WiFiClient();
@@ -11,8 +25,11 @@ ConnMgr::ConnMgr(EnvMonConfig* config) {
     timeClient = new NTPClient(*wifiUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
 }
 
-void ConnMgr::begin() {
-    
+void ConnMgr::begin() {    
+}
+
+void ConnMgr::loop() {
+  // Make sure everything is connected
 }
 
 void ConnMgr::connect() {
@@ -60,7 +77,7 @@ void ConnMgr::connectWifi() {
         password = envMonConfig->getWifiPassword(ssid);
         Serial.printf("connectToWifi: Using password: [%s]\n", password);
 
-        displayWifiConnecting(ssid);
+        
                 
         WiFi.begin(ssid, password);
         
@@ -161,4 +178,44 @@ WifiInfo* ConnMgr::scanForAPs() {
     WiFi.mode(savedMode);
   }
   return result;
+}
+
+void ConnMgr::readDateTime() {
+    oldDate = date;
+    oldTime = currentTime;
+    
+    date = "";  // clear the variables
+    currentTime = "";
+
+    // update the NTP client and get the UNIX UTC timestamp 
+    timeClient.update();
+    unsigned long epochTime =  timeClient.getEpochTime();
+
+    // convert received time stamp to time_t object
+    time_t local, utc;
+    utc = epochTime;
+
+    // Then convert the UTC UNIX timestamp to local time
+    TimeChangeRule usEDT = {"EDT", Second, Sun, Mar, 2, -300};  //UTC - 5 hours - change this as needed
+    TimeChangeRule usEST = {"EST", First, Sun, Nov, 2, -360};   //UTC - 6 hours - change this as needed
+    Timezone usEastern(usEDT, usEST);
+    local = usEastern.toLocal(utc);
+
+    // now format the Time variables into strings with proper names for month, day etc
+    date += days[weekday(local)-1];
+    date += ", ";
+    date += months[month(local)-1];
+    date += " ";
+    date += day(local);
+//    date += ", ";
+//    date += year(local);
+
+    // format the time to 12-hour format with AM/PM and no seconds
+    currentTime += hourFormat12(local);
+    currentTime += ":";
+    if(minute(local) < 10)  // add a zero if minute is under 10
+      currentTime += "0";
+    currentTime += minute(local);
+    // currentTime += " ";
+    // currentTime += ampm[isPM(local)];
 }
