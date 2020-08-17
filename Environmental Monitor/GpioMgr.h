@@ -8,15 +8,19 @@
 
 class GpioMgr {
     public:
-        GpioMgr(DeviceInfo);
+        GpioMgr(DeviceInfo*);
         void begin();
         void loop();
         int buttonInit();
+        void readTemperature();
+        void readHumidity();
+        void readLight();
+        void readMotion();
     private:
         void motionSensorInit();
         void readMotionData();
 
-        DeviceInfo deviceInfo;
+        DeviceInfo* deviceInfo;
 };
 
 

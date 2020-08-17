@@ -44,6 +44,8 @@ class UiMgr {
         void syncTemperature(boolean);
         void syncHumidity();
         void syncHumidity(boolean);
+        void syncMotion();
+        void syncMotion(boolean);
         void syncTime();
         void syncDate();
         void syncData();

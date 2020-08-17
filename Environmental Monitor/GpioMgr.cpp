@@ -13,18 +13,18 @@ void configButtonPressHandler() {
   //deleteConfigData();
 }
 
-GpioMgr::GpioMgr(DeviceInfo info) {
+GpioMgr::GpioMgr(DeviceInfo* info) {
     deviceInfo = info;
-}
-
-void GpioMgr::loop() {
-    // read and update all sensor values;
 }
 
 void GpioMgr::begin() {
     dht.begin();
     Wire.begin();
     motionSensorInit();
+}
+
+void GpioMgr::loop() {
+    // read and update all sensor values;
 }
 
 void GpioMgr::motionSensorInit() {
@@ -87,52 +87,18 @@ void readData() {
   timeToSendData = false;
 }
 
-void readTemp() {
-  oldTemp = currentTemp;
-  currentTemp = dht.readTemperature() + g_temperatureCalibrationValue;
-//  Serial.print("Temperature: ");
-//  Serial.print(currentTemp);
-//  Serial.println(" *C ");
-
-//  Serial.printf("Temperature: %d  *C \n", currentTemp);
+void GpioMgr::readTemperature() {
+    deviceInfo->setTemperature(dht.readTemperature() + g_temperatureCalibrationValue);
 }
 
-void readHumidity() {
-  oldHumidity = currentHumidity;
-  currentHumidity = dht.readHumidity() + g_humidityCalibrationValue;
-//  Serial.print("Humidity: ");
-//  Serial.print(currentHumidity);
-//  Serial.println(" %\t");
-  
-//  Serial.printf("Humidity: %d %\n", currentHumidity);
+void GpioMgr::readHumidity() {
+    deviceInfo->setHumidity(dht.readHumidity() + g_humidityCalibrationValue);
 }
 
-
-void GpioMgr::readLightData() {
-  // Light data is read at the time of publishing.
-  // Serial.printf("Light: %d\n", analogRead(LIGHT_SENSOR_PIN));
+void GpioMgr::readLight() {
+    deviceInfo->setLightValue(analogRead(LIGHT_SENSOR_PIN));
 }
 
-bool GpioMgr::readMotionData() {
-  bool motionStateChanged = false;
-  
-  if(digitalRead(MOTION_SENSOR_PIN) == HIGH ){
-    motionDetectedTime = millis();
-    if (!currentMotionDetectedState) {
-      currentMotionDetectedState = true;
-      motionStateChanged = true;
-//      digitalWrite(STATUS_LED, HIGH);
-      displayMotionIcon();
-      Serial.println("Motion detected");      
-    }
-  } else {
-    if( currentMotionDetectedState == true && (millis() -  motionDetectedTime) > noMotionDelay ) {
-      currentMotionDetectedState = false;
-      motionStateChanged = true;
-//      digitalWrite(STATUS_LED, LOW);
-      removeMotionIcon();
-      Serial.println("No motion detected");
-    }
-  }
-  return motionStateChanged;
+void GpioMgr::readMotion() {
+    deviceInfo->setMotionDetected(digitalRead(MOTION_SENSOR_PIN));
 }

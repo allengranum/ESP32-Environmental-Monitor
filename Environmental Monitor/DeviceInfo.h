@@ -25,6 +25,8 @@ class DeviceInfo {
         void  setHumidityCalibrationValue(float);
         float getHumidity();
         void  setHumidity(float);
+        int   getLightValue();
+        void  setLightValue(int);
         char* getSsid();
         void  setSsid(char*);
         EnvMonScreen  getScreen();
@@ -40,7 +42,8 @@ class DeviceInfo {
             float temperature;
             float humidityCalibrationValue;
             float humidity;
-            bool currentMotionDetectedState = false;
+            int   light;
+            bool  currentMotionDetectedState = false;
             int   statusLedColour;
             int   statusLedBrightness;
             int   displayBacklightBrightness;

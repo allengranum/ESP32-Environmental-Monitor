@@ -356,6 +356,30 @@ void UiMgr::syncLcd() {
     syncLcdBacklight();
 }
 
+void syncMotion() {
+    syncMotion(false);
+}
+
+void syncMotion( boolean force) {
+    if(digitalRead(MOTION_SENSOR_PIN) == HIGH ){
+    motionDetectedTime = millis();
+    if (!currentMotionDetectedState) {
+      currentMotionDetectedState = true;
+      motionStateChanged = true;
+//      digitalWrite(STATUS_LED, HIGH);
+      displayMotionIcon();
+      Serial.println("Motion detected");      
+    }
+  } else {
+    if( currentMotionDetectedState == true && (millis() -  motionDetectedTime) > noMotionDelay ) {
+      currentMotionDetectedState = false;
+      motionStateChanged = true;
+//      digitalWrite(STATUS_LED, LOW);
+      removeMotionIcon();
+      Serial.println("No motion detected");
+    }
+  }
+}
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 void UiMgr::syncBuzzer() {
