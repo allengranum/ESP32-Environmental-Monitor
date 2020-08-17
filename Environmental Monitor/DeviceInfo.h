@@ -27,6 +27,8 @@ class DeviceInfo {
         void  setHumidity(float);
         int   getLightValue();
         void  setLightValue(int);
+        bool  motionDetected();
+        void  setMotionDetected(bool);
         char* getSsid();
         void  setSsid(char*);
         EnvMonScreen  getScreen();
