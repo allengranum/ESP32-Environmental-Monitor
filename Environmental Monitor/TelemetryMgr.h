@@ -6,6 +6,7 @@ class TelemetryMgr {
         TelemetryMgr();
         void begin();
         void loop();
+        
         void startTelemetry();
         void stopTelemetry();
         void sendTelemetryData();

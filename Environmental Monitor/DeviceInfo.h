@@ -52,6 +52,7 @@ class DeviceInfo {
             int   displayBacklightState;
             int   orientation;
             EnvMonScreen screen;
+            Time time;
 };
 
 #endif  // DEVICE_INFO_H

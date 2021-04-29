@@ -16,6 +16,7 @@ class GpioMgr {
         void readHumidity();
         void readLight();
         void readMotion();
+        void readData();
     private:
         void motionSensorInit();
         void readMotionData();

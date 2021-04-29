@@ -18,10 +18,10 @@ void DeviceInfo::setLightValue(int lightValue) {
     light = lightValue;
 }
 
-bool DeviceInfo::motionDetected() {
-    return motionDetected;
+bool  DeviceInfo::motionDetected(){
+    return currentMotionDetectedState;
 }
 
 void DeviceInfo::setMotionDetected(bool motion) {
-    motionDetected = motion;
+    currentMotionDetectedState = motion;
 }

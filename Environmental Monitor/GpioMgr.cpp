@@ -25,6 +25,7 @@ void GpioMgr::begin() {
 
 void GpioMgr::loop() {
     // read and update all sensor values;
+    readData();
 }
 
 void GpioMgr::motionSensorInit() {
@@ -58,33 +59,11 @@ int GpioMgr::buttonInit() {
     return retVal;
 }
 
-void readData() {
-//  Serial.printf("----------------------\n");
-  readTemp();
-#ifndef HEADLESS
-  if (currentTemp != oldTemp) {
-    displayTemp(false);
-  }
-#endif
-
+void GpioMgr::readData() {
+  readTemperature();
   readHumidity();
-#ifndef HEADLESS
-  if (currentHumidity != oldHumidity) {
-    displayHumidity(false);
-  }
-#endif
-  
   readMotionData();
-  readLightData();
-  
-  if (WiFi.status() == WL_CONNECTED) {
-    readDateTime();
-#ifndef HEADLESS
-    displayDateTime(false);
-#endif
-  }
-
-  timeToSendData = false;
+  readLight();
 }
 
 void GpioMgr::readTemperature() {

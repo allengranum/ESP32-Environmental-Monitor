@@ -12,7 +12,9 @@ bool timeToConnectToWifi;
 int wifiAttemptCount;
 int wifiReconnectCount = 0;
 
-
+const char * days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"} ;
+const char * months[] = {"Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec"} ;
+const char * ampm[] = {"AM", "PM"} ;
 
 void wifiConnectCallback() {
       timeToConnectToWifi = true;
@@ -41,76 +43,76 @@ void ConnMgr::connectMqtt() {
     
 }
 
-void ConnMgr::connectWifi() {
-//  timerEnd(wifiConnectTimer);
-  
-  // Get the list of known wifi networks from the config file
-  WifiInfo* knownNetworks = envMonConfig->getSsids();
-  
-  if (knownNetworks->numberOfSSIDsFound > 0) {
-    Serial.printf("connectToWifi: %d known networks found in config file\n", knownNetworks->numberOfSSIDsFound);
-    delay(500);
-    for (int i=0;i<knownNetworks->numberOfSSIDsFound;i++) {
-      Serial.printf("    %d: [%s]\n", i, knownNetworks->ssid[i]);
-    }
-
-    // Get a list of available wifi networks
-    WifiInfo* availableNetworks = scanForAPs();
-        
-    char* ssid = NULL;
-    char* password = NULL;
-    int index=0;
+CON_MGR_STATUS ConnMgr::connectWifi() {
+  if (!wifiConnected && !connectingToWifi) {
+    // Get the list of known wifi networks from the config file
+    WifiInfo* knownNetworks = envMonConfig->getSsids();
     
-    while( index < availableNetworks->numberOfSSIDsFound && ssid == NULL ) {
-      char* currentSsid = availableNetworks->ssid[index];
-      Serial.printf("Checking if I know about ssid [%s]\n", currentSsid);
-      // See if it exists in the known list 
+    if (knownNetworks->numberOfSSIDsFound > 0) {
+      Serial.printf("connectToWifi: %d known networks found in config file\n", knownNetworks->numberOfSSIDsFound);
+      delay(500);
       for (int i=0;i<knownNetworks->numberOfSSIDsFound;i++) {
-        if (0 == strcmp(currentSsid, knownNetworks->ssid[i])) {
-          ssid = knownNetworks->ssid[i];
-        }
+        Serial.printf("    %d: [%s]\n", i, knownNetworks->ssid[i]);
       }
 
-      // if yes, get the associated passsword and attempt to connect
-      if (NULL != ssid) {
-        Serial.printf("connectToWifi: Attempting to connect to SSID: [%s]\n", ssid);
-        password = envMonConfig->getWifiPassword(ssid);
-        Serial.printf("connectToWifi: Using password: [%s]\n", password);
-
-        
-                
-        WiFi.begin(ssid, password);
-        
-        while (WiFi.status() != WL_CONNECTED) {
-            delay(500);
-            Serial.print(".");
+      // Get a list of available wifi networks
+      WifiInfo* availableNetworks = scanForAPs();
+          
+      char* ssid = NULL;
+      char* password = NULL;
+      int index=0;
+      
+      while( index < availableNetworks->numberOfSSIDsFound && ssid == NULL ) {
+        char* currentSsid = availableNetworks->ssid[index];
+        Serial.printf("Checking if I know about ssid [%s]\n", currentSsid);
+        // See if it exists in the known list 
+        for (int i=0;i<knownNetworks->numberOfSSIDsFound;i++) {
+          if (0 == strcmp(currentSsid, knownNetworks->ssid[i])) {
+            ssid = knownNetworks->ssid[i];
+          }
         }
 
-        displayWifiConnected(ssid);
-        
-        Serial.printf("WiFi connected\n");
-        Serial.printf("IP address: \n");
-        Serial.println(WiFi.localIP());
-      } else {
-          Serial.printf("I don't know any of the available WiFi networks.\n");
-      }
-      index++;
-      // if no, get the next available network from the top of the available list and try again    
-    }
-    
-    // Free up memory
-    free(availableNetworks->ssid);
-    free(availableNetworks);
-    free(knownNetworks->ssid);
+        // if yes, get the associated passsword and attempt to connect
+        if (NULL != ssid) {
+          Serial.printf("connectToWifi: Attempting to connect to SSID: [%s]\n", ssid);
+          password = envMonConfig->getWifiPassword(ssid);
+          Serial.printf("connectToWifi: Using password: [%s]\n", password);
 
-    if (WiFi.status() != WL_CONNECTED) {
+          
+                  
+          WiFi.begin(ssid, password);
+          
+          while (WiFi.status() != WL_CONNECTED) {
+              delay(500);
+              Serial.print(".");
+          }
+
+          displayWifiConnected(ssid);
+          
+          Serial.printf("WiFi connected\n");
+          Serial.printf("IP address: \n");
+          Serial.println(WiFi.localIP());
+        } else {
+            Serial.printf("I don't know any of the available WiFi networks.\n");
+        }
+        index++;
+        // if no, get the next available network from the top of the available list and try again    
+      }
+      
+      // Free up memory
+      free(availableNetworks->ssid);
+      free(availableNetworks);
+      free(knownNetworks->ssid);
+
+      if (WiFi.status() != WL_CONNECTED) {
+        performOnboarding();
+      }
+    } else {
+      Serial.println("connectToWifi: need to perform onboarding");
+      delay(500);
       performOnboarding();
     }
-  } else {
-    Serial.println("connectToWifi: need to perform onboarding");
-    delay(500);
-    performOnboarding();
-  }   
+  }
 }
 
 WifiInfo* ConnMgr::scanForAPs() {
@@ -181,15 +183,12 @@ WifiInfo* ConnMgr::scanForAPs() {
 }
 
 void ConnMgr::readDateTime() {
-    oldDate = date;
-    oldTime = currentTime;
-    
     date = "";  // clear the variables
-    currentTime = "";
+    time = "";
 
     // update the NTP client and get the UNIX UTC timestamp 
-    timeClient.update();
-    unsigned long epochTime =  timeClient.getEpochTime();
+    timeClient->update();
+    unsigned long epochTime =  timeClient->getEpochTime();
 
     // convert received time stamp to time_t object
     time_t local, utc;
@@ -211,11 +210,11 @@ void ConnMgr::readDateTime() {
 //    date += year(local);
 
     // format the time to 12-hour format with AM/PM and no seconds
-    currentTime += hourFormat12(local);
-    currentTime += ":";
+    time += hourFormat12(local);
+    time += ":";
     if(minute(local) < 10)  // add a zero if minute is under 10
-      currentTime += "0";
-    currentTime += minute(local);
-    // currentTime += " ";
-    // currentTime += ampm[isPM(local)];
+      time += "0";
+    time += minute(local);
+    // time += " ";
+    // time += ampm[isPM(local)];
 }

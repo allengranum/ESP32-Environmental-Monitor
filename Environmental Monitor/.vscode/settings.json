@@ -35,5 +35,6 @@
         "cmath": "cpp",
         "tuple": "cpp",
         "*.inc": "cpp"
-    }
+    },
+    "C_Cpp.errorSquiggles": "Enabled"
 }

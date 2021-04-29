@@ -115,11 +115,12 @@ void loop() {
   // and let them all take care of their respective areas
   // of responsability.
 
-  gpioMgr.loop();        // Read the sensor data
-  uiMgr.loop();          // Update the display with the sensor data
-  connMgr.loop();        // check or WiFi and MQTT connections
-  telemetryMgr.loop();   // Send the sensor data if connected
-  envMonConfig.loop();      // Update any values in flash if required
+  gpioMgr.loop();         // Read the sensor data
+  connMgr.readDateTime(); // read the date and time from the network
+  uiMgr.loop();           // Update the display with the sensor data
+  connMgr.loop();         // check or WiFi and MQTT connections
+  telemetryMgr.loop();    // Send the sensor data if connected
+  envMonConfig.loop();    // Update any values in flash if required
 
 
   // if (WiFi.status() == WL_CONNECTED) {
